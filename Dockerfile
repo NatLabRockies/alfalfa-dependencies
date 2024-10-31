@@ -33,7 +33,7 @@ WORKDIR /build
 
 RUN curl -fSsL https://portal.nersc.gov/project/sparse/superlu/superlu_mt_3.1.tar.gz | tar xz \
   && cd SuperLU_MT_3.1 \
-  && make CFLAGS="-O2 -fPIC -fopenmp" BLASLIB="-lblas" PLAT="_OPENMP" MPLIB="-fopenmp" lib -j1 \
+  && make CFLAGS="-O2 -fPIC -fopenmp" BLASLIB="-lblas" PLAT="_OPENMP" MPLIB="-fopenmp" lib -j$(nproc) \
   && cp -v ./lib/libsuperlu_mt_OPENMP.a /usr/lib \
   && cp -v ./SRC/*.h /usr/include
 
@@ -54,7 +54,7 @@ RUN git clone --depth 1 -b ${SUNDIALS_VERSION} https://github.com/LLNL/sundials.
   -DEXAMPLES_ENABLE=OFF \
   -DEXAMPLES_ENABLE_C=OFF \
   .. \
-  && make -j4 \
+  && make -j$(nproc) \
   && make install
 
 RUN gnuArch="$(dpkg-architecture --query DEB_HOST_MULTIARCH)" \
@@ -70,11 +70,12 @@ RUN git clone --depth 1 -b 2.4.1 https://github.com/modelon-community/fmi-librar
   && mkdir fmi_build && cd fmi_build \
   && mkdir fmi_library \
   && cmake -DCMAKE_INSTALL_PREFIX=/build/fmi-libary/fmi_library .. \
-  && make -j4 \
+  && make -j$(nproc) \
   && make install
 
-RUN git clone --depth 1 -b PyFMI-2.13.1 https://github.com/modelon-community/PyFMI.git \
+RUN git clone --depth 1 -b PyFMI-2.14.0 https://github.com/modelon-community/PyFMI.git \
   && cd PyFMI \
+  && python3 setup.py build --fmil-home=/build/fmi-libary/fmi_library --with-openmp -j $(nproc)\
   && python3 setup.py bdist_wheel --fmil-home=/build/fmi-libary/fmi_library --with-openmp\
   && auditwheel repair --plat manylinux_2_31_$(uname -m) dist/*.whl
 
