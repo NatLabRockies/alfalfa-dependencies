@@ -91,8 +91,8 @@ RUN gnuArch="$(dpkg-architecture --query DEB_HOST_ARCH_CPU)"\
   && curl -SfL https://archive.debian.org/debian/pool/main/g/gcc-6/libgfortran3_6.3.0-18+deb9u1_${gnuArch}.deb -o libgfortran3.deb
 
 FROM python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION} AS energyplus-dependencies
-ARG OPENSTUDIO_VERSION=3.8.0
-ARG OPENSTUDIO_VERSION_SHA=f953b6fcaf
+ARG OPENSTUDIO_VERSION=3.9.0-rc1
+ARG OPENSTUDIO_VERSION_SHA=fb69e5479c
 ARG ENERGYPLUS_VERSION=24.2.0
 ARG ENERGYPLUS_VERSION_SHA=94a887817b
 
