@@ -91,22 +91,29 @@ RUN gnuArch="$(dpkg-architecture --query DEB_HOST_ARCH_CPU)"\
   && curl -SfL https://archive.debian.org/debian/pool/main/g/gcc-6/libgfortran3_6.3.0-18+deb9u1_${gnuArch}.deb -o libgfortran3.deb
 
 FROM python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION} AS energyplus-dependencies
-ARG OPENSTUDIO_VERSION=3.9.0-rc1
-ARG OPENSTUDIO_VERSION_SHA=fb69e5479c
+ARG OPENSTUDIO_VERSION=3.9.0-rc2
+ARG OPENSTUDIO_VERSION_SHA=cc1e0bbd6d
 ARG ENERGYPLUS_VERSION=24.2.0
 ARG ENERGYPLUS_VERSION_SHA=94a887817b
 
 RUN apt-get update \
   && apt-get install -y \
   curl \
+  binutils \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /artifacts
 
-RUN export gnuArch=x86_64; if [ "$(uname -m)" = "aarch64" ]; then gnuArch=arm64; fi; export gnuArch \
+RUN set -eux; \
+  export gnuArch=x86_64; if [ "$(uname -m)" = "aarch64" ]; then gnuArch=arm64; fi; export gnuArch \
   && curl -SfL https://github.com/NREL/EnergyPlus/releases/download/v${ENERGYPLUS_VERSION}a/EnergyPlus-${ENERGYPLUS_VERSION}-${ENERGYPLUS_VERSION_SHA}-Linux-Ubuntu22.04-${gnuArch}.tar.gz -o energyplus.tar.gz \
   && curl -SfL https://github.com/NREL/OpenStudio/releases/download/v${OPENSTUDIO_VERSION}/OpenStudio-${OPENSTUDIO_VERSION}+${OPENSTUDIO_VERSION_SHA}-Ubuntu-22.04-${gnuArch}.deb -o openstudio.deb \
   && curl -SfL https://openstudio-resources.s3.amazonaws.com/bcvtb-linux.tar.gz -o bcvtb.tar.gz
+
+RUN set -eux; \
+  mkdir -p EnergyPlus; \
+  tar -C EnergyPlus --strip-components=1 -xzf energyplus.tar.gz; \
+  find EnergyPlus/ -type f -regex ".+?\.so.?.*" | xargs -I'{}' strip --strip-unneeded '{}'
 
 FROM python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION} AS alfalfa-dependencies
 
@@ -117,30 +124,32 @@ WORKDIR /artifacts
 
 # Install EnergyPlus
 RUN --mount=type=bind,from=energyplus-dependencies,source=/artifacts,target=/artifacts set -eux; \
-  mkdir ${ENERGYPLUS_DIR}; \
-  tar -C $ENERGYPLUS_DIR/ --strip-components=1 -xzf energyplus.tar.gz; \
+  mkdir -p ${ENERGYPLUS_DIR}; \
+  cp -r /artifacts/EnergyPlus/* ${ENERGYPLUS_DIR}; \
   cd ${ENERGYPLUS_DIR}; \
+  cp -n -r ${ENERGYPLUS_DIR}/python_lib/* /usr/local/lib/python3.12; \
   rm -rf \
     ExampleFiles \
     DataSets \
     Documentation \
     MacroDataSets \
-    python_standard_lib \
+    python_lib \
     WeatherData \
     libpython3.12.so.1.0 \
   ; \
   ln -s $ENERGYPLUS_DIR/energyplus /usr/local/bin/; \
   ln -s $ENERGYPLUS_DIR/ExpandObjects /usr/local/bin/; \
   ln -s $ENERGYPLUS_DIR/runenergyplus /usr/local/bin/; \
-  ln -s /usr/local/lib/python3.12 ${ENERGYPLUS_DIR}/python_standard_lib; \
-  ln -s /usr/local/lib/libpython3.12.so.1.0 ${ENERGYPLUS_DIR}/libpython3.12.so.1.0
+  ln -s /usr/local/lib/python3.12 ${ENERGYPLUS_DIR}/python_lib; \
+  ln -s /usr/local/lib/libpython3.12.so.1.0 ${ENERGYPLUS_DIR}/libpython3.12.so.1.0; \
+  find EnergyPlus/ -type f -regex ".+?\.so.?.*" | xargs -I'{}' strip --strip-unneeded '{}'
 
 # Install OpenStudio
 RUN --mount=type=bind,from=energyplus-dependencies,source=/artifacts,target=/artifacts set -eux; \
   apt-get update; \
   apt-get install -y --no-install-recommends \
     gdebi-core \
-    openjdk-17-jre-headless \
+    binutils \
   ; \
   gdebi -o "APT::Install-Recommends=0" -n openstudio.deb; \
   cd /usr/local/openstudio*; \
@@ -150,8 +159,10 @@ RUN --mount=type=bind,from=energyplus-dependencies,source=/artifacts,target=/art
     *Release_Notes*.pdf \
   ; \
   ln -s ${ENERGYPLUS_DIR} EnergyPlus; \
+  find /usr/local/openstudio* -type f -regex ".+?\.so.?.*" | xargs -I'{}' strip --strip-unneeded '{}'; \
   apt-get purge -y \
     gdebi-core \
+    binutils \
   ; \
   apt-get autoremove -y; \
   rm -rf /var/lib/apt/lists/*
