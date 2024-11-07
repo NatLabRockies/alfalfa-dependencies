@@ -107,12 +107,11 @@ WORKDIR /artifacts
 RUN set -eux; \
   export gnuArch=x86_64; if [ "$(uname -m)" = "aarch64" ]; then gnuArch=arm64; fi; export gnuArch; \
   curl -SfL https://github.com/NREL/EnergyPlus/releases/download/v${ENERGYPLUS_VERSION}a/EnergyPlus-${ENERGYPLUS_VERSION}-${ENERGYPLUS_VERSION_SHA}-Linux-Ubuntu22.04-${gnuArch}.tar.gz -o energyplus.tar.gz; \
-  curl -SfL https://github.com/NREL/OpenStudio/releases/download/v${OPENSTUDIO_VERSION}/OpenStudio-${OPENSTUDIO_VERSION}+${OPENSTUDIO_VERSION_SHA}-Ubuntu-22.04-${gnuArch}.deb -o openstudio.deb
+  curl -SfL http://openstudio-ci-builds.s3-website-us-west-2.amazonaws.com/PR-5296/OpenStudio-3.9.0-rc2%2B257d8d3c9d-Ubuntu-24.04-x86_64.deb -o openstudio.deb
 
 RUN set -eux; \
   mkdir -p EnergyPlus; \
-  tar -C EnergyPlus --strip-components=1 -xzf energyplus.tar.gz; \
-  find EnergyPlus/ -type f -regex ".+?\.so.?.*" | xargs -I'{}' strip --strip-unneeded '{}'
+  tar -C EnergyPlus --strip-components=1 -xzf energyplus.tar.gz
 
 FROM python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION} AS alfalfa-dependencies
 
@@ -140,8 +139,7 @@ RUN --mount=type=bind,from=energyplus-dependencies,source=/artifacts,target=/art
   ln -s $ENERGYPLUS_DIR/ExpandObjects /usr/local/bin/; \
   ln -s $ENERGYPLUS_DIR/runenergyplus /usr/local/bin/; \
   ln -s /usr/local/lib/python3.12 ${ENERGYPLUS_DIR}/python_lib; \
-  ln -s /usr/local/lib/libpython3.12.so.1.0 ${ENERGYPLUS_DIR}/libpython3.12.so.1.0; \
-  find EnergyPlus/ -type f -regex ".+?\.so.?.*" | xargs -I'{}' strip --strip-unneeded '{}'
+  ln -s /usr/local/lib/libpython3.12.so.1.0 ${ENERGYPLUS_DIR}/libpython3.12.so.1.0
 
 # Install OpenStudio
 RUN --mount=type=bind,from=energyplus-dependencies,source=/artifacts,target=/artifacts set -eux; \
