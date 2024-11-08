@@ -107,7 +107,7 @@ WORKDIR /artifacts
 RUN set -eux; \
   export gnuArch=x86_64; if [ "$(uname -m)" = "aarch64" ]; then gnuArch=arm64; fi; export gnuArch; \
   curl -SfL https://github.com/NREL/EnergyPlus/releases/download/v${ENERGYPLUS_VERSION}a/EnergyPlus-${ENERGYPLUS_VERSION}-${ENERGYPLUS_VERSION_SHA}-Linux-Ubuntu22.04-${gnuArch}.tar.gz -o energyplus.tar.gz; \
-  curl -SfL http://openstudio-ci-builds.s3-website-us-west-2.amazonaws.com/PR-5296/OpenStudio-3.9.0-rc2%2B257d8d3c9d-Ubuntu-24.04-x86_64.deb -o openstudio.deb
+  curl -SfL http://openstudio-ci-builds.s3-website-us-west-2.amazonaws.com/PR-5296/OpenStudio-3.9.0-rc2%2Bd5c11a6fe4-Ubuntu-22.04-x86_64.deb -o openstudio.deb
 
 RUN set -eux; \
   mkdir -p EnergyPlus; \
