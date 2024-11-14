@@ -185,5 +185,5 @@ RUN --mount=type=bind,from=modelica-dependencies,source=/artifacts,target=/artif
   apt-get autoremove -y; \
   rm -rf /var/lib/apt/lists/*
 
-ENV PYTHONPATH="${ENERGYPLUS_DIR}:${PYTHONPATH}"
+ENV PYTHONPATH="${ENERGYPLUS_DIR}:/usr/local/openstudio-3.9.0-rc2/Python"
 WORKDIR $HOME
