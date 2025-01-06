@@ -8,9 +8,6 @@ ARG ASSIMULO_VERSION=3.5.2
 RUN apt-get update \
   && apt-get install -y \
   cmake \
-  liblapack-dev \
-  libsuitesparse-dev \
-  libhypre-dev \
   curl \
   git \
   build-essential \
@@ -26,41 +23,12 @@ RUN python3 -m pip install \
   auditwheel \
   patchelf
 
-RUN gnuArch="$(dpkg-architecture --query DEB_HOST_MULTIARCH)"; \
-ln -s /usr/lib/$gnuArch/libblas.so /usr/lib/$gnuArch/libblas_OPENMP.so
-
 WORKDIR /build
-
-RUN curl -fSsL https://portal.nersc.gov/project/sparse/superlu/superlu_mt_3.1.tar.gz | tar xz \
-  && cd SuperLU_MT_3.1 \
-  && make CFLAGS="-O2 -fPIC -fopenmp" BLASLIB="-lblas" PLAT="_OPENMP" MPLIB="-fopenmp" lib -j$(nproc) \
-  && cp -v ./lib/libsuperlu_mt_OPENMP.a /usr/lib \
-  && cp -v ./SRC/*.h /usr/include
-
-RUN git clone --depth 1 -b ${SUNDIALS_VERSION} https://github.com/LLNL/sundials.git \
-  && cd sundials \
-  && mkdir build && cd build \
-  && cmake \
-  -LAH \
-  -DSUPERLUMT_BLAS_LIBRARIES=blas \
-  -DSUPERLUMT_LIBRARIES=blas \
-  -DSUPERLUMT_INCLUDE_DIR=/usr/include \
-  -DSUPERLUMT_LIBRARY=/usr/lib/libsuperlu_mt_OPENMP.a \
-  -DSUPERLUMT_THREAD_TYPE=OpenMP \
-  -DCMAKE_INSTALL_PREFIX=/usr \
-  -DSUPERLUMT_ENABLE=ON \
-  -DSUNDIALS_INDEX_SIZE=32 \
-  -DLAPACK_ENABLE=ON \
-  -DEXAMPLES_ENABLE=OFF \
-  -DEXAMPLES_ENABLE_C=OFF \
-  .. \
-  && make -j$(nproc) \
-  && make install
 
 RUN gnuArch="$(dpkg-architecture --query DEB_HOST_MULTIARCH)" \
   && git clone --depth 1 -b Assimulo-3.5.2 https://github.com/modelon-community/Assimulo.git \
   && cd Assimulo \
-  && python3 setup.py bdist_wheel --sundials-home=/usr --blas-home=/usr/lib/${gnuArch} --lapack-home=/usr/lib/${gnuArch} --superlu-home=/usr \
+  && python3 setup.py bdist_wheel \
   && auditwheel repair --plat manylinux_2_31_$(uname -m) build/dist/*.whl \
   && pip3 install wheelhouse/*.whl
 
@@ -75,8 +43,8 @@ RUN git clone --depth 1 -b 2.4.1 https://github.com/modelon-community/fmi-librar
 
 RUN git clone --depth 1 -b PyFMI-2.14.0 https://github.com/modelon-community/PyFMI.git \
   && cd PyFMI \
-  && python3 setup.py build --fmil-home=/build/fmi-libary/fmi_library --with-openmp -j $(nproc)\
-  && python3 setup.py bdist_wheel --fmil-home=/build/fmi-libary/fmi_library --with-openmp\
+  && python3 setup.py build --fmil-home=/build/fmi-libary/fmi_library -j $(nproc)\
+  && python3 setup.py bdist_wheel --fmil-home=/build/fmi-libary/fmi_library\
   && auditwheel repair --plat manylinux_2_31_$(uname -m) dist/*.whl
 
 WORKDIR /artifacts
@@ -180,5 +148,5 @@ RUN --mount=type=bind,from=modelica-dependencies,source=/artifacts,target=/artif
   apt-get autoremove -y; \
   rm -rf /var/lib/apt/lists/*
 
-ENV PYTHONPATH="${ENERGYPLUS_DIR}:/usr/local/openstudio-3.9.0-rc2/Python"
+ENV PYTHONPATH="${ENERGYPLUS_DIR}:/usr/local/openstudio-3.9.0/Python"
 WORKDIR $HOME
