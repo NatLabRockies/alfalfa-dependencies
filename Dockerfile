@@ -43,6 +43,7 @@ RUN git clone --depth 1 -b 2.4.1 https://github.com/modelon-community/fmi-librar
 
 RUN git clone --depth 1 -b PyFMI-2.14.0 https://github.com/modelon-community/PyFMI.git \
   && cd PyFMI \
+  # Build is done in 2 steps to allow for a multi-threaded build. bdist_wheel does not support -j
   && python3 setup.py build --fmil-home=/build/fmi-libary/fmi_library -j $(nproc)\
   && python3 setup.py bdist_wheel --fmil-home=/build/fmi-libary/fmi_library\
   && auditwheel repair --plat manylinux_2_31_$(uname -m) dist/*.whl
@@ -110,7 +111,6 @@ RUN --mount=type=bind,from=energyplus-dependencies,source=/artifacts,target=/art
   apt-get update; \
   apt-get install -y --no-install-recommends \
     gdebi-core \
-    binutils \
   ; \
   gdebi -o "APT::Install-Recommends=0" -n openstudio.deb; \
   cd /usr/local/openstudio*; \
@@ -122,7 +122,6 @@ RUN --mount=type=bind,from=energyplus-dependencies,source=/artifacts,target=/art
   ln -s ${ENERGYPLUS_DIR} EnergyPlus; \
   apt-get purge -y \
     gdebi-core \
-    binutils \
   ; \
   apt-get autoremove -y; \
   rm -rf /var/lib/apt/lists/*
