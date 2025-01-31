@@ -5,6 +5,11 @@ ARG DEBIAN_VERSION=bookworm
 FROM python:${PYTHON_VERSION}-slim-bullseye AS modelica-dependencies
 ARG SUNDIALS_VERSION=v7.1.1
 ARG ASSIMULO_VERSION=3.5.2
+
+# Bandaid to deal with segfaults when installing libc-bin
+RUN rm /var/lib/dpkg/info/libc-bin.* \
+  && apt-get clean
+
 RUN apt-get update \
   && apt-get install -y \
   cmake \
