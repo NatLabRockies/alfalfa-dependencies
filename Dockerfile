@@ -89,6 +89,31 @@ RUN gnuArch="$(dpkg-architecture --query DEB_HOST_ARCH_CPU)"\
   && curl -SfL https://archive.debian.org/debian/pool/main/g/gcc-6/gcc-6-base_6.3.0-18+deb9u1_${gnuArch}.deb -o gcc-6.deb \
   && curl -SfL https://archive.debian.org/debian/pool/main/g/gcc-6/libgfortran3_6.3.0-18+deb9u1_${gnuArch}.deb -o libgfortran3.deb
 
+# Many Modelica-exported FMUs (e.g. from Dymola) with a built-in CVode-based
+# solver dynamically link against SUNDIALS 5.x at runtime, which is a much
+# older ABI/SONAME (.so.5) than the SUNDIALS ${SUNDIALS_VERSION} we build above
+# for Assimulo/PyFMI's own use. Debian bookworm/bullseye only package SUNDIALS
+# 4.x/6.x, so we build the legacy 5.x runtime libraries from source and ship
+# them alongside, without touching the newer SUNDIALS install used elsewhere.
+FROM python:${PYTHON_VERSION}-slim-bullseye AS sundials-legacy-compat
+ARG SUNDIALS_LEGACY_VERSION=v5.8.0
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+  cmake \
+  build-essential \
+  git \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+RUN gnuArch="$(dpkg-architecture --query DEB_HOST_MULTIARCH)" \
+  && git clone --depth 1 -b ${SUNDIALS_LEGACY_VERSION} https://github.com/LLNL/sundials.git \
+  && cd sundials \
+  && mkdir build && cd build \
+  && cmake -DCMAKE_INSTALL_PREFIX=/artifacts -DCMAKE_INSTALL_LIBDIR=lib/${gnuArch} -DEXAMPLES_ENABLE_C=OFF .. \
+  && make -j4 \
+  && make install
+
 FROM python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION} AS energyplus-dependencies
 ARG OPENSTUDIO_VERSION=3.8.0
 ARG OPENSTUDIO_VERSION_SHA=f953b6fcaf
@@ -282,6 +307,21 @@ RUN --mount=type=bind,from=modelica-dependencies,source=/artifacts,target=/artif
   ; \
   apt-get autoremove -y; \
   rm -rf /var/lib/apt/lists/*
+
+# Install legacy SUNDIALS 5.x runtime libraries (see sundials-legacy-compat
+# above) needed by FMUs that dynamically link against them for their
+# built-in CVode-based solver, independent of the SUNDIALS ${SUNDIALS_VERSION}
+# built for Assimulo/PyFMI.
+ARG TARGETARCH
+RUN --mount=type=bind,from=sundials-legacy-compat,source=/artifacts,target=/sundials-legacy set -eux; \
+  case "${TARGETARCH}" in \
+    amd64) gnuArch=x86_64-linux-gnu ;; \
+    arm64) gnuArch=aarch64-linux-gnu ;; \
+    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+  esac; \
+  cp -P /sundials-legacy/lib/${gnuArch}/libsundials_cvode.so.5* /usr/lib/${gnuArch}/; \
+  cp -P /sundials-legacy/lib/${gnuArch}/libsundials_nvecserial.so.5* /usr/lib/${gnuArch}/; \
+  ldconfig
 
 WORKDIR $HOME
 
