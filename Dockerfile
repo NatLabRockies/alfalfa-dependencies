@@ -31,7 +31,12 @@ ln -s /usr/lib/$gnuArch/libblas.so /usr/lib/$gnuArch/libblas_OPENMP.so
 
 WORKDIR /build
 
-RUN curl -fSsL https://portal.nersc.gov/project/sparse/superlu/superlu_mt_3.1.tar.gz | tar xz \
+# portal.nersc.gov is an academic host that is occasionally unreachable/down;
+# fall back to an archive.org snapshot of the same tarball so the build isn't
+# blocked by that single point of failure.
+RUN (curl -fSsL https://portal.nersc.gov/project/sparse/superlu/superlu_mt_3.1.tar.gz \
+    || curl -fSsL http://web.archive.org/web/20250702043432/https://portal.nersc.gov/project/sparse/superlu/superlu_mt_3.1.tar.gz) \
+    | tar xz \
   && cd SuperLU_MT_3.1 \
   && make CFLAGS="-O2 -fPIC -fopenmp" BLASLIB="-lblas" PLAT="_OPENMP" MPLIB="-fopenmp" lib -j1 \
   && cp -v ./lib/libsuperlu_mt_OPENMP.a /usr/lib \
