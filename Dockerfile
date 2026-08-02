@@ -20,7 +20,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install \
-  Cython \
+  'Cython<3.1' \
   numpy \
   scipy \
   matplotlib \
