@@ -77,6 +77,11 @@ RUN gnuArch="$(dpkg-architecture --query DEB_HOST_ARCH_CPU)"\
 # SUNDIALS build used by Assimulo/PyFMI.
 FROM python:${PYTHON_VERSION}-slim-bullseye AS sundials-legacy-compat
 ARG SUNDIALS_LEGACY_VERSION=v5.8.0
+
+# Bandaid to deal with segfaults when installing libc-bin
+RUN rm /var/lib/dpkg/info/libc-bin.* \
+  && apt-get clean
+
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
   cmake \
