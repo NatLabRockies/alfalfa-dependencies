@@ -4,7 +4,7 @@ This repo builds and publishes the base Docker image consumed by the `alfalfa_wo
 
 - **EnergyPlus** and **OpenStudio** — building energy simulation engine and SDK.
 - **Assimulo** and **PyFMI** (built against SUNDIALS) — Modelica/FMU co-simulation support.
-- **Legacy SUNDIALS 5.x runtime libraries** (`sundials-legacy-compat` stage) — many Modelica-exported FMUs (e.g. from Dymola/OpenModelica) dynamically link against the older SUNDIALS 5.x ABI/SONAME at runtime, distinct from the newer SUNDIALS version built above for Assimulo/PyFMI's own use.
+- **Legacy SUNDIALS 5.x runtime libraries** (`sundials-legacy-compat` stage) — OpenModelica's CVode-based FMU solver is bound to SUNDIALS 5.x (still true as of OM 1.27.0), so any FMU compiled with OpenModelica and CVode enabled needs `libsundials_cvode.so.5`/`libsundials_nvecserial.so.5` at runtime — a different, older ABI/SONAME than the SUNDIALS version built above for this image's own Assimulo/PyFMI use. We install both side by side.
 
 ## Relationship to alfalfa
 
