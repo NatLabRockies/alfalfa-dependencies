@@ -20,7 +20,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install \
-  Cython \
+  'Cython<3.1' \
   numpy \
   scipy \
   matplotlib \
@@ -59,10 +59,45 @@ RUN cp /build/Assimulo/wheelhouse/* . \
   && cp /build/PyFMI/wheelhouse/* .
 
 RUN gnuArch="$(dpkg-architecture --query DEB_HOST_ARCH_CPU)"\
-  && curl -SfL http://ftp.us.debian.org/debian/pool/main/g/gcc-7/libgfortran4_7.4.0-6_${gnuArch}.deb -o libgfortran4.deb \
-  && curl -SfL http://ftp.us.debian.org/debian/pool/main/g/gcc-7/gcc-7-base_7.4.0-6_${gnuArch}.deb -o gcc-7.deb \
+  && curl -SfL https://archive.debian.org/debian/pool/main/g/gcc-7/libgfortran4_7.4.0-6_${gnuArch}.deb -o libgfortran4.deb \
+  && curl -SfL https://archive.debian.org/debian/pool/main/g/gcc-7/gcc-7-base_7.4.0-6_${gnuArch}.deb -o gcc-7.deb \
   && curl -SfL https://archive.debian.org/debian/pool/main/g/gcc-6/gcc-6-base_6.3.0-18+deb9u1_${gnuArch}.deb -o gcc-6.deb \
   && curl -SfL https://archive.debian.org/debian/pool/main/g/gcc-6/libgfortran3_6.3.0-18+deb9u1_${gnuArch}.deb -o libgfortran3.deb
+
+# Many Modelica-exported FMUs (e.g. from Dymola/OpenModelica) with a
+# built-in CVode-based solver dynamically link against SUNDIALS 5.x at
+# runtime (libsundials_cvode.so.5, libsundials_nvecserial.so.5). This is a
+# much older ABI/SONAME than the SUNDIALS ${SUNDIALS_VERSION} this image
+# builds above for its own Assimulo/PyFMI use, and Debian bookworm/bullseye
+# only package SUNDIALS 4.x/6.x, so those FMUs fail to load with a
+# misleading "cannot open shared object file" error even though the .so is
+# present in the FMU. Compile just the SUNDIALS v5.8.0 runtime libraries
+# here (built on bullseye for broad glibc compatibility) so they can be
+# installed into the final image below, without touching the newer
+# SUNDIALS build used by Assimulo/PyFMI.
+FROM python:${PYTHON_VERSION}-slim-bullseye AS sundials-legacy-compat
+ARG SUNDIALS_LEGACY_VERSION=v5.8.0
+
+# Bandaid to deal with segfaults when installing libc-bin
+RUN rm /var/lib/dpkg/info/libc-bin.* \
+  && apt-get clean
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+  cmake \
+  build-essential \
+  git \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+RUN gnuArch="$(dpkg-architecture --query DEB_HOST_MULTIARCH)" \
+  && git clone --depth 1 -b ${SUNDIALS_LEGACY_VERSION} https://github.com/LLNL/sundials.git \
+  && cd sundials \
+  && mkdir build && cd build \
+  && cmake -DCMAKE_INSTALL_PREFIX=/artifacts -DCMAKE_INSTALL_LIBDIR=lib/${gnuArch} -DEXAMPLES_ENABLE_C=OFF .. \
+  && make -j4 \
+  && make install
 
 FROM python:${PYTHON_VERSION}-slim-${DEBIAN_VERSION} AS energyplus-dependencies
 ARG OPENSTUDIO_VERSION=3.9.0
@@ -151,6 +186,19 @@ RUN --mount=type=bind,from=modelica-dependencies,source=/artifacts,target=/artif
   ; \
   apt-get autoremove -y; \
   rm -rf /var/lib/apt/lists/*
+
+# Install the legacy SUNDIALS 5.x runtime libraries built above (see the
+# sundials-legacy-compat stage comment for why these are needed).
+ARG TARGETARCH
+RUN --mount=type=bind,from=sundials-legacy-compat,source=/artifacts,target=/sundials-legacy set -eux; \
+  case "${TARGETARCH:-amd64}" in \
+    amd64) gnuArch=x86_64-linux-gnu ;; \
+    arm64) gnuArch=aarch64-linux-gnu ;; \
+    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+  esac; \
+  cp -P /sundials-legacy/lib/${gnuArch}/libsundials_cvode.so.5* /usr/lib/${gnuArch}/; \
+  cp -P /sundials-legacy/lib/${gnuArch}/libsundials_nvecserial.so.5* /usr/lib/${gnuArch}/; \
+  ldconfig
 
 ENV PYTHONPATH="${ENERGYPLUS_DIR}:/usr/local/openstudio-3.9.0/Python"
 WORKDIR $HOME
